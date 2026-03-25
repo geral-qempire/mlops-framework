@@ -1,9 +1,16 @@
+resource "random_string" "suffix" {
+  length  = 5
+  special = false
+  upper   = false
+}
+
 locals {
+  suffix          = random_string.suffix.result
   resource_prefix = "${var.project_name}-${var.environment}"
   # Storage account names must be lowercase alphanumeric, 3-24 chars
-  storage_account_name = replace("${var.project_name}${var.environment}st", "-", "")
+  storage_account_name = replace("${var.project_name}${var.environment}st${local.suffix}", "-", "")
   # Container registry names must be alphanumeric
-  container_registry_name = replace("${var.project_name}${var.environment}acr", "-", "")
+  container_registry_name = replace("${var.project_name}${var.environment}acr${local.suffix}", "-", "")
 
   common_tags = merge(var.tags, {
     environment = var.environment
@@ -32,7 +39,7 @@ module "storage_account" {
 module "keyvault" {
   source = "../../modules/keyvault"
 
-  name                = "${local.resource_prefix}-kv"
+  name                = "${local.resource_prefix}-kv-${local.suffix}"
   resource_group_name = module.resource_group.name
   location            = module.resource_group.location
   tags                = local.common_tags
