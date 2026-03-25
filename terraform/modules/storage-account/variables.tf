@@ -13,6 +13,12 @@ variable "location" {
   type        = string
 }
 
+variable "is_hns_enabled" {
+  description = "Enable hierarchical namespace (ADLS Gen2). Must be false for AML workspace storage."
+  type        = bool
+  default     = false
+}
+
 variable "default_container_name" {
   description = "Name of the default blob container for ML data"
   type        = string
