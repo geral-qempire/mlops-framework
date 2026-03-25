@@ -1,7 +1,6 @@
-project_name    = "mlops"
-environment     = "qa"
-location        = "westeurope"
-create_registry = false
+project_name = "mlops"
+environment  = "qa"
+location     = "westeurope"
 
 tags = {
   team = "mlops"

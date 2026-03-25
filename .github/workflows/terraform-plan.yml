@@ -22,7 +22,7 @@ jobs:
         name: Detect changed projects
         run: |
           projects='[]'
-          for env in dev qa prd; do
+          for env in dev qa prd shared; do
             changed=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} -- "terraform/projects/${env}/" "terraform/modules/" "terraform/templates/" | wc -l)
             if [ "$changed" -gt 0 ]; then
               projects=$(echo "$projects" | jq -c ". + [\"${env}\"]")

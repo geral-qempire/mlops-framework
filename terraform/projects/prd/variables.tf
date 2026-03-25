@@ -13,12 +13,6 @@ variable "location" {
   type        = string
 }
 
-variable "create_registry" {
-  description = "Whether to create the shared Azure ML registry"
-  type        = bool
-  default     = false
-}
-
 variable "tags" {
   description = "Additional tags"
   type        = map(string)

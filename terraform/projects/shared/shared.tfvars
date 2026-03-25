@@ -1,5 +1,4 @@
 project_name = "mlops"
-environment  = "prd"
 location     = "westeurope"
 
 tags = {

@@ -15,6 +15,7 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
+      shared: ${{ steps.filter.outputs.shared }}
       dev: ${{ steps.filter.outputs.dev }}
       qa: ${{ steps.filter.outputs.qa }}
       prd: ${{ steps.filter.outputs.prd }}
@@ -26,7 +27,7 @@ jobs:
       - id: filter
         name: Detect changed projects
         run: |
-          for env in dev qa prd; do
+          for env in shared dev qa prd; do
             changed=$(git diff --name-only HEAD~1 -- "terraform/projects/${env}/" "terraform/modules/" "terraform/templates/" | wc -l)
             if [ "$changed" -gt 0 ]; then
               echo "${env}=true" >> "$GITHUB_OUTPUT"
@@ -35,9 +36,36 @@ jobs:
             fi
           done
 
-  apply-dev:
+  apply-shared:
     needs: detect-changes
-    if: needs.detect-changes.outputs.dev == 'true'
+    if: needs.detect-changes.outputs.shared == 'true'
+    runs-on: ubuntu-latest
+    environment: shared
+    defaults:
+      run:
+        working-directory: terraform/projects/shared
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Apply
+        run: terraform apply -var-file="shared.tfvars" -auto-approve
+
+  apply-dev:
+    needs: [detect-changes, apply-shared]
+    if: always() && needs.detect-changes.outputs.dev == 'true' && (needs.apply-shared.result == 'success' || needs.apply-shared.result == 'skipped')
     runs-on: ubuntu-latest
     environment: dev
     defaults:
@@ -64,7 +92,7 @@ jobs:
 
   apply-qa:
     needs: [detect-changes, apply-dev]
-    if: needs.detect-changes.outputs.qa == 'true'
+    if: always() && needs.detect-changes.outputs.qa == 'true' && (needs.apply-dev.result == 'success' || needs.apply-dev.result == 'skipped')
     runs-on: ubuntu-latest
     environment: qa
     defaults:
@@ -91,7 +119,7 @@ jobs:
 
   apply-prd:
     needs: [detect-changes, apply-qa]
-    if: needs.detect-changes.outputs.prd == 'true'
+    if: always() && needs.detect-changes.outputs.prd == 'true' && (needs.apply-qa.result == 'success' || needs.apply-qa.result == 'skipped')
     runs-on: ubuntu-latest
     environment: prd
     defaults:

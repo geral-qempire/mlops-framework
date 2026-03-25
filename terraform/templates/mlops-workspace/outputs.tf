@@ -33,7 +33,3 @@ output "container_registry_login_server" {
   value       = module.container_registry.login_server
 }
 
-output "aml_registry_name" {
-  description = "Name of the shared Azure ML registry (if created)"
-  value       = var.create_registry ? module.aml_registry[0].name : null
-}
