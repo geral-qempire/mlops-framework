@@ -13,9 +13,14 @@ output "aml_workspace_id" {
   value       = module.aml_workspace.id
 }
 
-output "storage_account_name" {
-  description = "Name of the storage account"
-  value       = module.storage_account.name
+output "workspace_storage_account_name" {
+  description = "Name of the workspace storage account"
+  value       = module.workspace_storage.name
+}
+
+output "datalake_storage_account_name" {
+  description = "Name of the ADLS Gen2 data lake storage account"
+  value       = module.datalake_storage.name
 }
 
 output "keyvault_name" {

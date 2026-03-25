@@ -8,7 +8,8 @@ locals {
   suffix          = random_string.suffix.result
   resource_prefix = "${var.project_name}-${var.environment}"
   # Storage account names must be lowercase alphanumeric, 3-24 chars
-  storage_account_name = replace("${var.project_name}${var.environment}st${local.suffix}", "-", "")
+  ws_storage_account_name   = replace("${var.project_name}${var.environment}ws${local.suffix}", "-", "")
+  datalake_storage_name     = replace("${var.project_name}${var.environment}dl${local.suffix}", "-", "")
   # Container registry names must be alphanumeric
   container_registry_name = replace("${var.project_name}${var.environment}acr${local.suffix}", "-", "")
 
@@ -27,13 +28,25 @@ module "resource_group" {
   tags     = local.common_tags
 }
 
-module "storage_account" {
+module "workspace_storage" {
   source = "../../modules/storage-account"
 
-  name                = local.storage_account_name
+  name                = local.ws_storage_account_name
   resource_group_name = module.resource_group.name
   location            = module.resource_group.location
+  is_hns_enabled      = false
   tags                = local.common_tags
+}
+
+module "datalake_storage" {
+  source = "../../modules/storage-account"
+
+  name                   = local.datalake_storage_name
+  resource_group_name    = module.resource_group.name
+  location               = module.resource_group.location
+  is_hns_enabled         = true
+  default_container_name = "mldata"
+  tags                   = local.common_tags
 }
 
 module "keyvault" {
@@ -72,7 +85,7 @@ module "aml_workspace" {
   location                = module.resource_group.location
   application_insights_id = module.monitoring.app_insights_id
   key_vault_id            = module.keyvault.id
-  storage_account_id      = module.storage_account.id
+  storage_account_id      = module.workspace_storage.id
   container_registry_id   = module.container_registry.id
   tags                    = local.common_tags
 }

@@ -10,8 +10,12 @@ output "aml_workspace_id" {
   value = module.foundation.aml_workspace_id
 }
 
-output "storage_account_name" {
-  value = module.foundation.storage_account_name
+output "workspace_storage_account_name" {
+  value = module.foundation.workspace_storage_account_name
+}
+
+output "datalake_storage_account_name" {
+  value = module.foundation.datalake_storage_account_name
 }
 
 output "keyvault_name" {
