@@ -1,0 +1,117 @@
+name: Terraform Apply
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "terraform/**"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      dev: ${{ steps.filter.outputs.dev }}
+      qa: ${{ steps.filter.outputs.qa }}
+      prd: ${{ steps.filter.outputs.prd }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - id: filter
+        name: Detect changed projects
+        run: |
+          for env in dev qa prd; do
+            changed=$(git diff --name-only HEAD~1 -- "terraform/projects/${env}/" "terraform/modules/" "terraform/templates/" | wc -l)
+            if [ "$changed" -gt 0 ]; then
+              echo "${env}=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "${env}=false" >> "$GITHUB_OUTPUT"
+            fi
+          done
+
+  apply-dev:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.dev == 'true'
+    runs-on: ubuntu-latest
+    environment: dev
+    defaults:
+      run:
+        working-directory: terraform/projects/dev
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Apply
+        run: terraform apply -var-file="dev.tfvars" -auto-approve
+
+  apply-qa:
+    needs: [detect-changes, apply-dev]
+    if: needs.detect-changes.outputs.qa == 'true'
+    runs-on: ubuntu-latest
+    environment: qa
+    defaults:
+      run:
+        working-directory: terraform/projects/qa
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Apply
+        run: terraform apply -var-file="qa.tfvars" -auto-approve
+
+  apply-prd:
+    needs: [detect-changes, apply-qa]
+    if: needs.detect-changes.outputs.prd == 'true'
+    runs-on: ubuntu-latest
+    environment: prd
+    defaults:
+      run:
+        working-directory: terraform/projects/prd
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Apply
+        run: terraform apply -var-file="prd.tfvars" -auto-approve

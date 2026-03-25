@@ -1,0 +1,23 @@
+name: Release Terraform Modules
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "terraform/modules/**"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: techpivot/terraform-module-releaser@v1
+        with:
+          module-path: terraform/modules
