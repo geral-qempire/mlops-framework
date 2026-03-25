@@ -1,0 +1,94 @@
+name: Terraform Plan
+
+on:
+  pull_request:
+    paths:
+      - "terraform/**"
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      projects: ${{ steps.filter.outputs.projects }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: filter
+        name: Detect changed projects
+        run: |
+          projects='[]'
+          for env in dev qa prd; do
+            changed=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} -- "terraform/projects/${env}/" "terraform/modules/" "terraform/templates/" | wc -l)
+            if [ "$changed" -gt 0 ]; then
+              projects=$(echo "$projects" | jq -c ". + [\"${env}\"]")
+            fi
+          done
+          echo "projects=$projects" >> "$GITHUB_OUTPUT"
+
+  plan:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.projects != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project: ${{ fromJson(needs.detect-changes.outputs.projects) }}
+      fail-fast: false
+    defaults:
+      run:
+        working-directory: terraform/projects/${{ matrix.project }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: true
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -var-file="${{ matrix.project }}.tfvars" -no-color -out=tfplan
+        continue-on-error: true
+
+      - name: Comment Plan on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `#### Terraform Plan - \`${{ matrix.project }}\` 🏗️
+
+            \`\`\`
+            ${{ steps.plan.outputs.stdout }}
+            \`\`\`
+
+            *Triggered by @${{ github.actor }} on \`${{ github.event_name }}\`*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+
+      - name: Fail on Plan Error
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
