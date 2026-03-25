@@ -74,9 +74,8 @@ module "aml_registry" {
   source = "../../modules/aml-registry"
   count  = var.create_registry ? 1 : 0
 
-  name                = "${var.project_name}-registry"
-  resource_group_name = module.resource_group.name
-  location            = module.resource_group.location
-  storage_account_id  = module.storage_account.id
-  tags                = local.common_tags
+  name              = "${var.project_name}-registry"
+  resource_group_id = module.resource_group.id
+  location          = module.resource_group.location
+  tags              = local.common_tags
 }

@@ -1,7 +1,7 @@
 name: Release Terraform Modules
 
 on:
-  push:
+  pull_request:
     branches:
       - main
     paths:
@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   release:

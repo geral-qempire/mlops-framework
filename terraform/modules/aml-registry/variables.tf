@@ -3,18 +3,13 @@ variable "name" {
   type        = string
 }
 
-variable "resource_group_name" {
-  description = "Name of the resource group"
+variable "resource_group_id" {
+  description = "ID of the resource group"
   type        = string
 }
 
 variable "location" {
   description = "Azure region"
-  type        = string
-}
-
-variable "storage_account_id" {
-  description = "ID of the storage account for the registry"
   type        = string
 }
 
