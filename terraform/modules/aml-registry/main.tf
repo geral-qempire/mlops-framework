@@ -33,7 +33,7 @@ resource "azapi_resource" "this" {
           acrDetails = [
             {
               systemCreatedAcrAccount = {
-                acrAccountSku = "Basic"
+                acrAccountSku = "Premium"
               }
             }
           ]
