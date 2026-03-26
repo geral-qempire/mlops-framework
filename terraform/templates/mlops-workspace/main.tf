@@ -89,13 +89,3 @@ module "aml_workspace" {
   container_registry_id   = module.container_registry.id
   tags                    = local.common_tags
 }
-
-module "aml_registry" {
-  source = "../../modules/aml-registry"
-  count  = var.create_registry ? 1 : 0
-
-  name              = "${var.project_name}-registry"
-  resource_group_id = module.resource_group.id
-  location          = module.resource_group.location
-  tags              = local.common_tags
-}

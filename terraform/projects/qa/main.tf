@@ -1,9 +1,8 @@
-module "foundation" {
-  source = "../../templates/mlops-foundation"
+module "workspace" {
+  source = "../../templates/mlops-workspace"
 
-  project_name    = var.project_name
-  environment     = var.environment
-  location        = var.location
-  create_registry = var.create_registry
-  tags            = var.tags
+  project_name = var.project_name
+  environment  = var.environment
+  location     = var.location
+  tags         = var.tags
 }
