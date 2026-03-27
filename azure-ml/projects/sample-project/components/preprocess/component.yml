@@ -1,0 +1,34 @@
+$schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
+name: sample-project-preprocess-component
+display_name: Sample Project Preprocess
+type: command
+description: Preprocess raw tabular data into train and test datasets.
+tags:
+  owner: mlops
+  stage: shared-registry
+  project: sample-project
+inputs:
+  raw_data:
+    type: uri_file
+  target_column:
+    type: string
+    default: target
+    optional: true
+  test_size:
+    type: number
+    default: 0.2
+    optional: true
+outputs:
+  train_data:
+    type: uri_file
+  test_data:
+    type: uri_file
+code: ./src
+environment: azureml://registries/__REGISTRY_NAME__/environments/__TRAINING_ENV_NAME__/labels/latest
+command: >-
+  python preprocess.py
+  --raw-data ${{inputs.raw_data}}
+  --train-output ${{outputs.train_data}}
+  --test-output ${{outputs.test_data}}
+  --target-column ${{inputs.target_column}}
+  --test-size ${{inputs.test_size}}

@@ -1,0 +1,29 @@
+$schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
+name: sample-project-evaluate-component
+display_name: Sample Project Evaluate
+type: command
+description: Evaluate trained model on held-out test data.
+tags:
+  owner: mlops
+  stage: shared-registry
+  project: sample-project
+inputs:
+  model_input:
+    type: uri_folder
+  test_data:
+    type: uri_file
+  target_column:
+    type: string
+    default: target
+    optional: true
+outputs:
+  evaluation_report:
+    type: uri_folder
+code: ./src
+environment: azureml://registries/__REGISTRY_NAME__/environments/__TRAINING_ENV_NAME__/labels/latest
+command: >-
+  python evaluate.py
+  --model-input ${{inputs.model_input}}
+  --test-data ${{inputs.test_data}}
+  --evaluation-report ${{outputs.evaluation_report}}
+  --target-column ${{inputs.target_column}}

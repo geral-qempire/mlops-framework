@@ -1,0 +1,31 @@
+$schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
+name: sample-project-train-component
+display_name: Sample Project Train
+type: command
+description: Train a baseline logistic regression model from preprocessed data.
+tags:
+  owner: mlops
+  stage: shared-registry
+  project: sample-project
+inputs:
+  train_data:
+    type: uri_file
+  target_column:
+    type: string
+    default: target
+    optional: true
+  regularization_strength:
+    type: number
+    default: 1.0
+    optional: true
+outputs:
+  model_output:
+    type: uri_folder
+code: ./src
+environment: azureml://registries/__REGISTRY_NAME__/environments/__TRAINING_ENV_NAME__/labels/latest
+command: >-
+  python train.py
+  --train-data ${{inputs.train_data}}
+  --model-output ${{outputs.model_output}}
+  --target-column ${{inputs.target_column}}
+  --regularization-strength ${{inputs.regularization_strength}}

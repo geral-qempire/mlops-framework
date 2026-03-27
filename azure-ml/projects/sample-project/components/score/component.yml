@@ -1,0 +1,24 @@
+$schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
+name: sample-project-score-component
+display_name: Sample Project Score
+type: command
+description: Score new data with a trained model artifact.
+tags:
+  owner: mlops
+  stage: shared-registry
+  project: sample-project
+inputs:
+  model_input:
+    type: uri_folder
+  input_data:
+    type: uri_file
+outputs:
+  predictions:
+    type: uri_file
+code: ./src
+environment: azureml://registries/__REGISTRY_NAME__/environments/__INFERENCE_ENV_NAME__/labels/latest
+command: >-
+  python score.py
+  --model-input ${{inputs.model_input}}
+  --input-data ${{inputs.input_data}}
+  --predictions ${{outputs.predictions}}
