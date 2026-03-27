@@ -178,6 +178,14 @@ jobs:
               --only-show-errors \
               --output none
 
+            az ml environment update \
+              --name "${env_name}" \
+              --version "${next_version}" \
+              --registry-name "${REGISTRY_NAME}" \
+              --label latest \
+              --only-show-errors \
+              --output none
+
             jq --arg p "${PROJECT_NAME}" --arg n "${env_name}" --arg v "${next_version}" '. += [{"project":$p,"name":$n,"version":$v}]' "${manifest_path}" > "${manifest_path}.tmp"
             mv "${manifest_path}.tmp" "${manifest_path}"
           done
