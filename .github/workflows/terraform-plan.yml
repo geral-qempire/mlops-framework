@@ -17,14 +17,19 @@ jobs:
       projects: ${{ steps.filter.outputs.projects }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - id: filter
         name: Detect changed projects
         run: |
           projects='[]'
-          for env in dev qa prd shared; do
-            changed=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} -- "terraform/projects/${env}/" "terraform/modules/" "terraform/templates/" | wc -l)
-            if [ "$changed" -gt 0 ]; then
+          base_sha="${{ github.event.pull_request.base.sha }}"
+          head_sha="${{ github.sha }}"
+
+          for env in shared dev qa prd; do
+            changed_files=$(git diff --name-only "$base_sha" "$head_sha" -- "terraform/projects/${env}/" "terraform/modules/" "terraform/templates/" | wc -l)
+            if [ "$changed_files" -gt 0 ]; then
               projects=$(echo "$projects" | jq -c ". + [\"${env}\"]")
             fi
           done

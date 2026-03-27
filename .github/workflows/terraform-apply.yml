@@ -64,8 +64,8 @@ jobs:
         run: terraform apply -var-file="shared.tfvars" -auto-approve
 
   apply-dev:
-    needs: [detect-changes, apply-shared]
-    if: always() && needs.detect-changes.outputs.dev == 'true' && (needs.apply-shared.result == 'success' || needs.apply-shared.result == 'skipped')
+    needs: detect-changes
+    if: needs.detect-changes.outputs.dev == 'true'
     runs-on: ubuntu-latest
     environment: dev
     defaults:
@@ -91,8 +91,8 @@ jobs:
         run: terraform apply -var-file="dev.tfvars" -auto-approve
 
   apply-qa:
-    needs: [detect-changes, apply-dev]
-    if: always() && needs.detect-changes.outputs.qa == 'true' && (needs.apply-dev.result == 'success' || needs.apply-dev.result == 'skipped')
+    needs: detect-changes
+    if: needs.detect-changes.outputs.qa == 'true'
     runs-on: ubuntu-latest
     environment: qa
     defaults:
@@ -118,8 +118,8 @@ jobs:
         run: terraform apply -var-file="qa.tfvars" -auto-approve
 
   apply-prd:
-    needs: [detect-changes, apply-qa]
-    if: always() && needs.detect-changes.outputs.prd == 'true' && (needs.apply-qa.result == 'success' || needs.apply-qa.result == 'skipped')
+    needs: detect-changes
+    if: needs.detect-changes.outputs.prd == 'true'
     runs-on: ubuntu-latest
     environment: prd
     defaults:
