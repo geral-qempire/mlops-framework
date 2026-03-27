@@ -27,5 +27,5 @@ command: >-
   python train.py
   --train-data ${{inputs.train_data}}
   --model-output ${{outputs.model_output}}
-  --target-column ${{inputs.target_column}}
-  --regularization-strength ${{inputs.regularization_strength}}
+  $[[--target-column ${{inputs.target_column}}]]
+  $[[--regularization-strength ${{inputs.regularization_strength}}]]

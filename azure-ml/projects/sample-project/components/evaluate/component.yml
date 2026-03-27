@@ -26,4 +26,4 @@ command: >-
   --model-input ${{inputs.model_input}}
   --test-data ${{inputs.test_data}}
   --evaluation-report ${{outputs.evaluation_report}}
-  --target-column ${{inputs.target_column}}
+  $[[--target-column ${{inputs.target_column}}]]
