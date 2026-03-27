@@ -1,5 +1,5 @@
 $schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
-name: sample-project-train-component
+name: sample_project_train_component
 display_name: Sample Project Train
 type: command
 description: Train a baseline logistic regression model from preprocessed data.

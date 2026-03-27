@@ -1,5 +1,5 @@
 $schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
-name: sample-project-evaluate-component
+name: sample_project_evaluate_component
 display_name: Sample Project Evaluate
 type: command
 description: Evaluate trained model on held-out test data.

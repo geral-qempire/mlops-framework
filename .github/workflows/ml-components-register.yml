@@ -61,6 +61,7 @@ jobs:
           import yaml
 
           project_name = os.environ["PROJECT_NAME"]
+          project_name_prefix = project_name.replace("-", "_")
           project_root = Path("azure-ml/projects") / project_name
 
           component_files = [
@@ -83,8 +84,10 @@ jobs:
                   raise ValueError(f"{component_file}: invalid AML command component schema reference")
               if "__REGISTRY_NAME__" not in str(content["environment"]):
                   raise ValueError(f"{component_file}: environment must include __REGISTRY_NAME__ placeholder")
-              if not str(content["name"]).startswith(f"{project_name}-"):
-                  raise ValueError(f"{component_file}: component name must start with '{project_name}-'")
+              if not str(content["name"]).startswith(f"{project_name_prefix}_"):
+                  raise ValueError(
+                      f"{component_file}: component name must start with '{project_name_prefix}_'"
+                  )
               script_path = component_file.parent / "src" / f"{component_file.parent.name}.py"
               if not script_path.exists():
                   raise FileNotFoundError(f"{component_file}: missing source script {script_path}")
@@ -144,7 +147,6 @@ jobs:
       - name: Register components to shared registry
         run: |
           mkdir -p azure-ml-artifact-manifests
-          mkdir -p .tmp/components
           project_root="azure-ml/projects/${PROJECT_NAME}"
           config_path="${project_root}/config/${TARGET_ENV}.yml"
           training_env_name="${PROJECT_NAME}-${TRAINING_ENV_NAME_SUFFIX}"
@@ -181,7 +183,8 @@ jobs:
             component_name=$(python -c 'import sys, yaml; print(yaml.safe_load(open(sys.argv[1], encoding="utf-8"))["name"])' "${file}")
 
             next_version=$(get_next_version "${component_name}")
-            tmp_file=".tmp/components/${component_name}.yml"
+            component_dir=$(dirname "${file}")
+            tmp_file="${component_dir}/component.resolved.yml"
 
             sed \
               -e "s/__REGISTRY_NAME__/${REGISTRY_NAME}/g" \
@@ -197,6 +200,8 @@ jobs:
               --set tags.git_sha="${GITHUB_SHA}" tags.owner="mlops" tags.stage="${TARGET_ENV}" tags.project="${PROJECT_NAME}" \
               --only-show-errors \
               --output none
+
+            rm -f "${tmp_file}"
 
             jq --arg p "${PROJECT_NAME}" --arg n "${component_name}" --arg v "${next_version}" '. += [{"project":$p,"name":$n,"version":$v}]' "${manifest_path}" > "${manifest_path}.tmp"
             mv "${manifest_path}.tmp" "${manifest_path}"
