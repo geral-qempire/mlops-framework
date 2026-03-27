@@ -4,6 +4,8 @@ resource "random_string" "suffix" {
   upper   = false
 }
 
+# CI trigger note: template-only metadata change to exercise plan/apply workflow paths.
+
 locals {
   suffix          = random_string.suffix.result
   resource_prefix = "${var.project_name}-${var.environment}"
