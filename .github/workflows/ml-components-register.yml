@@ -122,7 +122,13 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Setup Azure CLI
-        uses: azure/setup-azure-cli@v4
+        uses: azure/CLI@v2
+        with:
+          inlineScript: |
+            az version
+
+      - name: Verify Azure CLI
+        run: az version
 
       - name: Install Azure ML CLI extension
         run: az extension add --name ml --upgrade --only-show-errors
