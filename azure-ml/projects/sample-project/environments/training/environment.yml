@@ -1,0 +1,10 @@
+$schema: https://azuremlschemas.azureedge.net/latest/environment.schema.json
+name: sample-project-training-env
+description: Training environment for sample-project preprocess, train, and evaluate components.
+image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04:latest
+conda_file: conda.yml
+tags:
+  owner: mlops
+  stage: shared-registry
+  project: sample-project
+  git_sha: set-by-ci

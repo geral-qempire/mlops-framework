@@ -1,0 +1,5 @@
+subscription_id: ${AZURE_SUBSCRIPTION_ID}
+location: westeurope
+resource_group: mlops-dev-rg
+workspace_name: mlops-dev-ws
+registry_name: mlops-registry

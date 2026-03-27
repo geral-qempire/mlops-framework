@@ -1,0 +1,203 @@
+name: ML Components Register
+
+on:
+  pull_request:
+    paths:
+      - "azure-ml/projects/**"
+      - ".github/workflows/ml-components-register.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "azure-ml/projects/**"
+      - ".github/workflows/ml-components-register.yml"
+  workflow_dispatch:
+    inputs:
+      project_name:
+        description: "ML project folder under azure-ml/projects"
+        required: true
+        default: sample-project
+        type: string
+      target_environment:
+        description: "Target environment config (dev/qa/prd)"
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - qa
+          - prd
+      register_assets:
+        description: "Register assets into shared registry"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.project_name || 'sample-project' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install validation dependencies
+        run: python -m pip install --upgrade pip pyyaml
+
+      - name: Validate component YAML and source contracts
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import yaml
+
+          project_name = os.environ["PROJECT_NAME"]
+          project_root = Path("azure-ml/projects") / project_name
+
+          component_files = [
+              project_root / "components/preprocess/component.yml",
+              project_root / "components/train/component.yml",
+              project_root / "components/evaluate/component.yml",
+              project_root / "components/score/component.yml",
+          ]
+          required_keys = {"$schema", "name", "type", "command", "code", "environment", "inputs", "outputs"}
+
+          for component_file in component_files:
+              if not component_file.exists():
+                  raise FileNotFoundError(f"Missing file: {component_file}")
+
+              content = yaml.safe_load(component_file.read_text(encoding="utf-8"))
+              missing = required_keys.difference(content.keys())
+              if missing:
+                  raise ValueError(f"{component_file}: missing keys {sorted(missing)}")
+              if "commandComponent.schema.json" not in str(content["$schema"]):
+                  raise ValueError(f"{component_file}: invalid AML command component schema reference")
+              if "__REGISTRY_NAME__" not in str(content["environment"]):
+                  raise ValueError(f"{component_file}: environment must include __REGISTRY_NAME__ placeholder")
+              if not str(content["name"]).startswith(f"{project_name}-"):
+                  raise ValueError(f"{component_file}: component name must start with '{project_name}-'")
+              script_path = component_file.parent / "src" / f"{component_file.parent.name}.py"
+              if not script_path.exists():
+                  raise FileNotFoundError(f"{component_file}: missing source script {script_path}")
+
+          print("Component YAML validation passed.")
+          PY
+
+  register:
+    needs: validate
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.register_assets == true)
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.target_environment || 'dev' }}
+    env:
+      TARGET_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.target_environment || 'dev' }}
+      PROJECT_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.project_name || 'sample-project' }}
+      REGISTRY_NAME: ${{ vars.AML_REGISTRY_NAME }}
+      TRAINING_ENV_NAME_SUFFIX: training-env
+      INFERENCE_ENV_NAME_SUFFIX: inference-env
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install registration dependencies
+        run: python -m pip install --upgrade pip pyyaml
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Azure CLI
+        uses: azure/setup-azure-cli@v4
+
+      - name: Install Azure ML CLI extension
+        run: az extension add --name ml --upgrade --only-show-errors
+
+      - name: Resolve registry name
+        run: |
+          if [ -z "${REGISTRY_NAME}" ]; then
+            REGISTRY_NAME="mlops-registry"
+          fi
+          echo "REGISTRY_NAME=${REGISTRY_NAME}" >> "${GITHUB_ENV}"
+          echo "Using registry: ${REGISTRY_NAME}"
+
+      - name: Register components to shared registry
+        run: |
+          mkdir -p azure-ml-artifact-manifests
+          mkdir -p .tmp/components
+          project_root="azure-ml/projects/${PROJECT_NAME}"
+          config_path="${project_root}/config/${TARGET_ENV}.yml"
+          training_env_name="${PROJECT_NAME}-${TRAINING_ENV_NAME_SUFFIX}"
+          inference_env_name="${PROJECT_NAME}-${INFERENCE_ENV_NAME_SUFFIX}"
+          manifest_path="azure-ml-artifact-manifests/${PROJECT_NAME}-component-versions.json"
+          echo "[]" > "${manifest_path}"
+
+          if [ ! -f "${config_path}" ]; then
+            echo "Missing config file: ${config_path}"
+            exit 1
+          fi
+
+          get_next_version() {
+            local component_name="$1"
+            local versions
+            versions=$(az ml component list --registry-name "${REGISTRY_NAME}" --name "${component_name}" --query "[].version" -o tsv 2>/dev/null || true)
+            local max_version=0
+            if [ -n "${versions}" ]; then
+              while IFS= read -r version; do
+                if [[ "${version}" =~ ^[0-9]+$ ]] && [ "${version}" -gt "${max_version}" ]; then
+                  max_version="${version}"
+                fi
+              done <<< "${versions}"
+            fi
+            echo $((max_version + 1))
+          }
+
+          for file in \
+            "${project_root}/components/preprocess/component.yml" \
+            "${project_root}/components/train/component.yml" \
+            "${project_root}/components/evaluate/component.yml" \
+            "${project_root}/components/score/component.yml"; do
+
+            component_name=$(python -c 'import sys, yaml; print(yaml.safe_load(open(sys.argv[1], encoding="utf-8"))["name"])' "${file}")
+
+            next_version=$(get_next_version "${component_name}")
+            tmp_file=".tmp/components/${component_name}.yml"
+
+            sed \
+              -e "s/__REGISTRY_NAME__/${REGISTRY_NAME}/g" \
+              -e "s/__TRAINING_ENV_NAME__/${training_env_name}/g" \
+              -e "s/__INFERENCE_ENV_NAME__/${inference_env_name}/g" \
+              "${file}" > "${tmp_file}"
+
+            echo "Registering ${component_name}:${next_version}"
+            az ml component create \
+              --file "${tmp_file}" \
+              --registry-name "${REGISTRY_NAME}" \
+              --version "${next_version}" \
+              --set tags.git_sha="${GITHUB_SHA}" tags.owner="mlops" tags.stage="${TARGET_ENV}" tags.project="${PROJECT_NAME}" \
+              --only-show-errors \
+              --output none
+
+            jq --arg p "${PROJECT_NAME}" --arg n "${component_name}" --arg v "${next_version}" '. += [{"project":$p,"name":$n,"version":$v}]' "${manifest_path}" > "${manifest_path}.tmp"
+            mv "${manifest_path}.tmp" "${manifest_path}"
+          done
+
+      - name: Upload component version manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PROJECT_NAME }}-component-versions
+          path: azure-ml-artifact-manifests/${{ env.PROJECT_NAME }}-component-versions.json

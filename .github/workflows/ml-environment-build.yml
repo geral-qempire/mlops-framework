@@ -1,0 +1,183 @@
+name: ML Environment Build
+
+on:
+  pull_request:
+    paths:
+      - "azure-ml/projects/**"
+      - ".github/workflows/ml-environment-build.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "azure-ml/projects/**"
+      - ".github/workflows/ml-environment-build.yml"
+  workflow_dispatch:
+    inputs:
+      project_name:
+        description: "ML project folder under azure-ml/projects"
+        required: true
+        default: sample-project
+        type: string
+      target_environment:
+        description: "Target environment config (dev/qa/prd)"
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - qa
+          - prd
+      register_assets:
+        description: "Register assets into shared registry"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.project_name || 'sample-project' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install validation dependencies
+        run: python -m pip install --upgrade pip pyyaml
+
+      - name: Validate environment YAML structure
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import yaml
+
+          project_name = os.environ["PROJECT_NAME"]
+          project_root = Path("azure-ml/projects") / project_name
+          config_file = project_root / "config/dev.yml"
+          env_files = [
+              project_root / "environments/training/environment.yml",
+              project_root / "environments/inference/environment.yml",
+          ]
+
+          if not config_file.exists():
+              raise FileNotFoundError(f"Missing config contract file: {config_file}")
+
+          required_keys = {"$schema", "name", "image", "conda_file", "tags"}
+          for env_file in env_files:
+              if not env_file.exists():
+                  raise FileNotFoundError(f"Missing file: {env_file}")
+              content = yaml.safe_load(env_file.read_text(encoding="utf-8"))
+              missing = required_keys.difference(content.keys())
+              if missing:
+                  raise ValueError(f"{env_file}: missing keys {sorted(missing)}")
+              if not str(content["name"]).startswith(f"{project_name}-"):
+                  raise ValueError(f"{env_file}: environment name must start with '{project_name}-'")
+              if "environment.schema.json" not in str(content["$schema"]):
+                  raise ValueError(f"{env_file}: invalid AML environment schema reference")
+              conda_path = env_file.parent / content["conda_file"]
+              if not conda_path.exists():
+                  raise FileNotFoundError(f"{env_file}: missing conda file {conda_path}")
+
+          print("Environment YAML validation passed.")
+          PY
+
+  register:
+    needs: validate
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.register_assets == true)
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.target_environment || 'dev' }}
+    env:
+      TARGET_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.target_environment || 'dev' }}
+      PROJECT_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.project_name || 'sample-project' }}
+      REGISTRY_NAME: ${{ vars.AML_REGISTRY_NAME }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install registration dependencies
+        run: python -m pip install --upgrade pip pyyaml
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Azure CLI
+        uses: azure/setup-azure-cli@v4
+
+      - name: Install Azure ML CLI extension
+        run: az extension add --name ml --upgrade --only-show-errors
+
+      - name: Resolve registry name
+        run: |
+          if [ -z "${REGISTRY_NAME}" ]; then
+            REGISTRY_NAME="mlops-registry"
+          fi
+          echo "REGISTRY_NAME=${REGISTRY_NAME}" >> "${GITHUB_ENV}"
+          echo "Using registry: ${REGISTRY_NAME}"
+
+      - name: Register environments to shared registry
+        run: |
+          mkdir -p azure-ml-artifact-manifests
+          project_root="azure-ml/projects/${PROJECT_NAME}"
+          config_path="${project_root}/config/${TARGET_ENV}.yml"
+          manifest_path="azure-ml-artifact-manifests/${PROJECT_NAME}-environment-versions.json"
+          echo "[]" > "${manifest_path}"
+
+          if [ ! -f "${config_path}" ]; then
+            echo "Missing config file: ${config_path}"
+            exit 1
+          fi
+
+          get_next_version() {
+            local env_name="$1"
+            local versions
+            versions=$(az ml environment list --registry-name "${REGISTRY_NAME}" --name "${env_name}" --query "[].version" -o tsv 2>/dev/null || true)
+            local max_version=0
+            if [ -n "${versions}" ]; then
+              while IFS= read -r version; do
+                if [[ "${version}" =~ ^[0-9]+$ ]] && [ "${version}" -gt "${max_version}" ]; then
+                  max_version="${version}"
+                fi
+              done <<< "${versions}"
+            fi
+            echo $((max_version + 1))
+          }
+
+          for file in "${project_root}/environments/training/environment.yml" "${project_root}/environments/inference/environment.yml"; do
+            env_name=$(python -c 'import sys, yaml; print(yaml.safe_load(open(sys.argv[1], encoding="utf-8"))["name"])' "${file}")
+            next_version=$(get_next_version "${env_name}")
+            echo "Registering ${env_name}:${next_version}"
+
+            az ml environment create \
+              --file "${file}" \
+              --registry-name "${REGISTRY_NAME}" \
+              --version "${next_version}" \
+              --set tags.git_sha="${GITHUB_SHA}" tags.owner="mlops" tags.stage="${TARGET_ENV}" tags.project="${PROJECT_NAME}" \
+              --only-show-errors \
+              --output none
+
+            jq --arg p "${PROJECT_NAME}" --arg n "${env_name}" --arg v "${next_version}" '. += [{"project":$p,"name":$n,"version":$v}]' "${manifest_path}" > "${manifest_path}.tmp"
+            mv "${manifest_path}.tmp" "${manifest_path}"
+          done
+
+      - name: Upload environment version manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PROJECT_NAME }}-environment-versions
+          path: azure-ml-artifact-manifests/${{ env.PROJECT_NAME }}-environment-versions.json
