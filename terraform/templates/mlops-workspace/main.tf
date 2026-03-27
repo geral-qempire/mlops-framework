@@ -82,7 +82,8 @@ module "monitoring" {
 module "aml_workspace" {
   source = "../../modules/aml-workspace"
 
-  name                    = "${local.resource_prefix}-ws"
+  # Include suffix to avoid collisions with soft-deleted workspace tombstones.
+  name                    = "${local.resource_prefix}-ws-${local.suffix}"
   resource_group_name     = module.resource_group.name
   location                = module.resource_group.location
   application_insights_id = module.monitoring.app_insights_id
