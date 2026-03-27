@@ -1,5 +1,5 @@
 $schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
-name: sample-project-train-component
+name: sample_project_train_component
 display_name: Sample Project Train
 type: command
 description: Train a baseline logistic regression model from preprocessed data.
@@ -27,5 +27,5 @@ command: >-
   python train.py
   --train-data ${{inputs.train_data}}
   --model-output ${{outputs.model_output}}
-  --target-column ${{inputs.target_column}}
-  --regularization-strength ${{inputs.regularization_strength}}
+  $[[--target-column ${{inputs.target_column}}]]
+  $[[--regularization-strength ${{inputs.regularization_strength}}]]

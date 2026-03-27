@@ -1,5 +1,5 @@
 $schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
-name: sample-project-score-component
+name: sample_project_score_component
 display_name: Sample Project Score
 type: command
 description: Score new data with a trained model artifact.

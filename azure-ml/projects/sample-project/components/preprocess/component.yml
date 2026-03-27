@@ -1,5 +1,5 @@
 $schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
-name: sample-project-preprocess-component
+name: sample_project_preprocess_component
 display_name: Sample Project Preprocess
 type: command
 description: Preprocess raw tabular data into train and test datasets.
@@ -30,5 +30,5 @@ command: >-
   --raw-data ${{inputs.raw_data}}
   --train-output ${{outputs.train_data}}
   --test-output ${{outputs.test_data}}
-  --target-column ${{inputs.target_column}}
-  --test-size ${{inputs.test_size}}
+  $[[--target-column ${{inputs.target_column}}]]
+  $[[--test-size ${{inputs.test_size}}]]

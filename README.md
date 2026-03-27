@@ -75,5 +75,5 @@ These manifests are the handoff for downstream phases (pipeline execution, model
 ### Adding a New ML Project
 
 1. Create `azure-ml/projects/<new_project_name>/` with the same folder layout as `sample-project`.
-2. Prefix environment and component names with `<new_project_name>-` to prevent shared registry collisions.
+2. Prefix environment names with `<new_project_name>-` and component names with `<new_project_name>_` (AML component names only allow lowercase letters, numbers, and underscores).
 3. Run ML workflows with `project_name=<new_project_name>`.
